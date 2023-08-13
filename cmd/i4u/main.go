@@ -1,0 +1,29 @@
+package main
+
+import (
+	"github.com/fadyat/i4u/cmd/i4u/commands"
+	"github.com/fadyat/i4u/internal/config"
+	"go.uber.org/zap"
+	"log"
+)
+
+func init() {
+	log.SetFlags(0)
+
+	var lg, _ = zap.NewProduction()
+	zap.ReplaceGlobals(lg)
+}
+
+func main() {
+	defer func() { _ = zap.L().Sync() }()
+
+	gmailConfig, err := config.NewGmail()
+	if err != nil {
+		zap.L().Fatal("failed to initialize gmail config", zap.Error(err))
+	}
+
+	cmd := commands.Init(gmailConfig)
+	if e := cmd.Execute(); e != nil {
+		zap.L().Fatal("failed to execute command", zap.Error(e))
+	}
+}
