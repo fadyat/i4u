@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
+	github.com/sashabaranov/go-openai v1.14.2
 	github.com/spf13/cobra v1.7.0
 	go.uber.org/zap v1.25.0
 	golang.org/x/oauth2 v0.11.0

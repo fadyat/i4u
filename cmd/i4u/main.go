@@ -22,7 +22,12 @@ func main() {
 		zap.L().Fatal("failed to initialize gmail config", zap.Error(err))
 	}
 
-	cmd := commands.Init(gmailConfig)
+	gptConfig, err := config.NewGPT()
+	if err != nil {
+		zap.L().Fatal("failed to initialize gpt config", zap.Error(err))
+	}
+
+	cmd := commands.Init(gmailConfig, gptConfig)
 	if e := cmd.Execute(); e != nil {
 		zap.L().Fatal("failed to execute command", zap.Error(e))
 	}

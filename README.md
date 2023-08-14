@@ -2,4 +2,6 @@
 
 **Internship for you**, it's your personal internship analyzer.
 
-![](./docs/workflow.png)
+![](./docs/system-workflow.png)
+
+![](./docs/core-workflow.png)

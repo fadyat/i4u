@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Init(cfg *config.Gmail) *cobra.Command {
+func Init(gmailConfig *config.Gmail, gptConfig *config.GPT) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "i4u",
 		Short: "i4u is a command line tool for reading your Gmail inbox",
@@ -15,8 +15,9 @@ func Init(cfg *config.Gmail) *cobra.Command {
 		Version: "v0.0.1",
 	}
 
-	rootCmd.AddCommand(authorize(cfg))
-	rootCmd.AddCommand(run(cfg))
-	rootCmd.AddCommand(status(cfg))
+	rootCmd.AddCommand(authorize(gmailConfig))
+	rootCmd.AddCommand(run(gmailConfig))
+	rootCmd.AddCommand(status(gmailConfig))
+	rootCmd.AddCommand(analyze(gptConfig))
 	return rootCmd
 }
