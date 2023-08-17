@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/fadyat/i4u/cmd/i4u/commands"
 	"github.com/fadyat/i4u/internal/config"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"log"
 )
@@ -12,6 +13,8 @@ func init() {
 
 	var lg, _ = zap.NewProduction()
 	zap.ReplaceGlobals(lg)
+
+	_ = godotenv.Load(".env")
 }
 
 func main() {

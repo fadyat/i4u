@@ -18,10 +18,6 @@ import (
 
 func run(config *config.Gmail) *cobra.Command {
 	var oauth2Config = token.GetOAuthConfig(config)
-	var staticToken, err = token.ReadTokenFromFile(config.TokenFile)
-	if err != nil {
-		log.Fatal("unauthorized, run `i4u init` first")
-	}
 
 	return &cobra.Command{
 		Use:   "run",
@@ -40,6 +36,11 @@ When message is processed, it will get an label "i4u-processed"
 to avoid processing it again.
 `,
 		Run: func(cmd *cobra.Command, _ []string) {
+			var staticToken, err = token.ReadTokenFromFile(config.TokenFile)
+			if err != nil {
+				log.Fatal("unauthorized, run `i4u init` first")
+			}
+
 			signalChan := make(chan os.Signal, 1)
 			signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 			defer close(signalChan)

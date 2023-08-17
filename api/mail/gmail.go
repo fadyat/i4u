@@ -4,10 +4,12 @@ import (
 	"context"
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/cmd/i4u/token"
+	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
+	"os"
 )
 
 type GmailClient struct {
@@ -41,38 +43,53 @@ func (g *GmailClient) refreshToken(ctx context.Context) error {
 	return token.Save("token.json", newToken)
 }
 
-func (g *GmailClient) GetUnreadEmails(ctx context.Context) {
+func (g *GmailClient) GetUnreadMsgs(ctx context.Context) {
 	if err := g.refreshToken(ctx); err != nil {
 		zap.L().Error("failed to refresh token", zap.Error(err))
 		return
 	}
 
-	emails, err := g.getUnreadEmails()
+	msgs, err := g.getUnreadMsgs()
 	if err != nil {
-		zap.L().Error("failed to get unread emails", zap.Error(err))
+		zap.L().Error("failed to get unread messages", zap.Error(err))
 		return
 	}
 
-	for _, email := range emails {
-		zap.L().Info("processing email", zap.Any("email", email))
+	for _, msg := range msgs {
+		customMsg, e := entity.NewMsgFromGmailMessage(msg)
+		if e != nil {
+			zap.L().Error("failed to create custom message", zap.Error(e))
+			return
+		}
+
+		zap.L().Info("new unread message", zap.Any("message", customMsg))
 	}
 }
 
-func (g *GmailClient) getUnreadEmails() ([]*gmail.Message, error) {
-	lst, err := g.s.Users.Messages.List("me").Q("is:unread").MaxResults(5).Do()
+func (g *GmailClient) getUnreadMsgs() ([]*gmail.Message, error) {
+	unread, err := g.s.Users.Messages.List("me").MaxResults(5).Do()
 	if err != nil {
 		return nil, err
 	}
 
-	var emails []*gmail.Message
-	for _, msg := range lst.Messages {
-		email, e := g.s.Users.Messages.Get("me", msg.Id).Do()
-		if e != nil {
-			return nil, e
+	var msgs = make([]*gmail.Message, len(unread.Messages))
+	for i, msg := range unread.Messages {
+		msgs[i], err = g.s.Users.Messages.Get("me", msg.Id).Format("full").Do()
+		if err != nil {
+			return nil, err
 		}
 
-		emails = append(emails, email)
+		file, err := os.Create("message.json")
+		if err != nil {
+			return nil, err
+		}
+
+		j, _ := msgs[i].MarshalJSON()
+		_, err = file.WriteString(string(j))
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return emails, nil
+	return msgs, nil
 }

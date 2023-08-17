@@ -19,14 +19,14 @@ func NewMailJob(client api.Mail) Job {
 }
 
 func (m *Mail) Run(ctx context.Context) error {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(5 * time.Second)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			m.client.GetUnreadEmails(ctx)
+			m.client.GetUnreadMsgs(ctx)
 		}
 	}
 }

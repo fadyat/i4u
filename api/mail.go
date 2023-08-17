@@ -5,5 +5,5 @@ import (
 )
 
 type Mail interface {
-	GetUnreadEmails(context.Context)
+	GetUnreadMsgs(context.Context)
 }
