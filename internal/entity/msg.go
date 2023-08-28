@@ -1,8 +1,8 @@
 package entity
 
 import (
-	"encoding/base64"
 	"fmt"
+	"github.com/fadyat/i4u/pkg/parser"
 	"google.golang.org/api/gmail/v1"
 )
 
@@ -16,19 +16,13 @@ func (m *Msg) String() string {
 }
 
 func NewMsgFromGmailMessage(msg *gmail.Message) (*Msg, error) {
-	for _, part := range msg.Payload.Parts {
-		if part.MimeType == "text/plain" {
-			data, err := base64.URLEncoding.DecodeString(part.Body.Data)
-			if err != nil {
-				return nil, err
-			}
-
-			return &Msg{
-				Subject: "sub",
-				Body:    string(data),
-			}, nil
-		}
+	content, err := parser.CleanMsg(msg, parser.PlainText)
+	if err != nil {
+		return nil, err
 	}
 
-	return &Msg{}, nil
+	return &Msg{
+		Subject: "example",
+		Body:    content,
+	}, nil
 }

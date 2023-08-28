@@ -9,7 +9,6 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
-	"os"
 )
 
 type GmailClient struct {
@@ -63,6 +62,9 @@ func (g *GmailClient) GetUnreadMsgs(ctx context.Context) {
 		}
 
 		zap.L().Info("new unread message", zap.Any("message", customMsg))
+
+		// todo: put message to queue
+		// todo: add label to message
 	}
 }
 
@@ -75,17 +77,6 @@ func (g *GmailClient) getUnreadMsgs() ([]*gmail.Message, error) {
 	var msgs = make([]*gmail.Message, len(unread.Messages))
 	for i, msg := range unread.Messages {
 		msgs[i], err = g.s.Users.Messages.Get("me", msg.Id).Format("full").Do()
-		if err != nil {
-			return nil, err
-		}
-
-		file, err := os.Create("message.json")
-		if err != nil {
-			return nil, err
-		}
-
-		j, _ := msgs[i].MarshalJSON()
-		_, err = file.WriteString(string(j))
 		if err != nil {
 			return nil, err
 		}
