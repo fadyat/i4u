@@ -6,3 +6,5 @@ bin
 message.json
 itsfadyat-token.json
 token.json
+.DS_Store
+cleaned.txt

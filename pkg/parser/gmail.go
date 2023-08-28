@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
 	"google.golang.org/api/gmail/v1"
@@ -11,43 +13,116 @@ import (
 	"strings"
 )
 
-func init() {
-	var lg, _ = zap.NewProduction()
-	zap.ReplaceGlobals(lg)
+const (
+	PlainText = "text/plain"
+	HTMLText  = "text/html"
+)
+
+// CleanMsg getting message body or combining all parts of message body and
+// clean all unnecessary data from text/plain or text/html formats to return
+// it in valid format for analyzing.
+func CleanMsg(msg *gmail.Message, takeFormat string) (string, error) {
+	body := msg.Payload.Body
+	if body.Data != "" {
+		return cleanBody(body, msg.Payload.MimeType)
+	}
+
+	parts := msg.Payload.Parts
+	if len(parts) == 0 {
+		return "", errors.New("no body or parts found")
+	}
+
+	return cleanParts(parts, takeFormat)
 }
 
-func cleanText(text string) string {
-	text = regexp.MustCompile(`[\n\t]+`).ReplaceAllString(text, " ")
-	text = regexp.MustCompile(` +`).ReplaceAllString(text, " ")
-	return strings.TrimSpace(text)
+func cleanParts(parts []*gmail.MessagePart, takeFormat string) (string, error) {
+	var content strings.Builder
+	for _, part := range parts {
+		if part.MimeType != takeFormat {
+			continue
+		}
+
+		p, err := cleanBody(part.Body, takeFormat)
+		if err != nil {
+			return "", err
+		}
+
+		content.WriteString(p)
+	}
+
+	return content.String(), nil
 }
 
-func cleanHTML(raw []byte) (string, error) {
-	document, err := goquery.NewDocumentFromReader(strings.NewReader(string(raw)))
+func cleanBody(body *gmail.MessagePartBody, bodyFormat string) (string, error) {
+	content, err := base64.URLEncoding.DecodeString(body.Data)
 	if err != nil {
 		return "", err
 	}
 
-	document.Find("script").Each(func(i int, selection *goquery.Selection) {
-		selection.Remove()
-	})
+	return cleanContent(string(content), bodyFormat)
+}
 
-	document.Find("style").Each(func(i int, selection *goquery.Selection) {
-		selection.Remove()
-	})
+func cleanContent(content, bodyFormat string) (string, error) {
+	switch bodyFormat {
+	case PlainText:
+		return cleanText(content), nil
+	case HTMLText:
+		return cleanHTML(content)
+	}
 
-	document.Find("link").Each(func(i int, selection *goquery.Selection) {
-		selection.Remove()
-	})
+	return "", fmt.Errorf("unknown body format: %s", bodyFormat)
+}
 
-	document.Find("meta").Each(func(i int, selection *goquery.Selection) {
-		selection.Remove()
-	})
+// cleanText removes all unnecessary data from text/plain
+// and returns only text content.
+func cleanText(text string) string {
+	pipe := []func(string) string{
+		replaceNoneBreakingSpace,
+		removeUrls,
+		removeSpaces,
+	}
+
+	for _, fn := range pipe {
+		text = fn(text)
+	}
+
+	return text
+}
+
+func replaceNoneBreakingSpace(text string) string {
+	return strings.ReplaceAll(text, "\u00a0", " ")
+}
+
+func removeUrls(text string) string {
+	return regexp.MustCompile(`https?://\S+`).ReplaceAllString(text, "")
+}
+
+func removeSpaces(text string) string {
+	return regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+}
+
+// cleanHTML removes all unnecessary data from html text
+// and returns only text content.
+func cleanHTML(raw string) (string, error) {
+	document, err := goquery.NewDocumentFromReader(strings.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+
+	removeElements := []string{"script", "style", "link", "meta"}
+	for _, elem := range removeElements {
+		document.Find(elem).Each(func(i int, selection *goquery.Selection) {
+			selection.Remove()
+		})
+	}
 
 	return cleanText(document.Text()), nil
 }
 
 func main() {
+	var lg, _ = zap.NewProduction()
+	zap.ReplaceGlobals(lg)
+
 	bytes, err := os.ReadFile("message.json")
 	if err != nil {
 		zap.L().Fatal("failed to read file", zap.Error(err))
@@ -58,36 +133,20 @@ func main() {
 		zap.L().Fatal("failed to unmarshal json", zap.Error(e))
 	}
 
-	parts := gmailMessage.Payload.Parts
-	for _, part := range parts {
-		content, e := base64.URLEncoding.DecodeString(part.Body.Data)
-		if e != nil {
-			zap.L().Fatal("failed to decode base64", zap.Error(e))
-		}
-
-		switch part.MimeType {
-		case "text/plain":
-			zap.L().Info("text/plain", zap.String("text", cleanText(string(content))))
-		case "text/html":
-			text, e := cleanHTML(content)
-			if e != nil {
-				zap.L().Fatal("failed to clean html", zap.Error(e))
-			}
-
-			zap.L().Info("text/html", zap.String("text", text))
-		}
-	}
-
-	body := gmailMessage.Payload.Body
-	content, e := base64.URLEncoding.DecodeString(body.Data)
-	if e != nil {
-		zap.L().Fatal("failed to decode base64", zap.Error(e))
-	}
-
-	cnt, err := cleanHTML(content)
+	msg, err := CleanMsg(&gmailMessage, PlainText)
 	if err != nil {
-		zap.L().Fatal("failed to clean html", zap.Error(err))
+		zap.L().Fatal("failed to clean message", zap.Error(err))
 	}
 
-	zap.L().Info("text/html", zap.String("text", cnt))
+	cleanedFile, err := os.Create("cleaned.txt")
+	if err != nil {
+		zap.L().Fatal("failed to create file", zap.Error(err))
+	}
+
+	_, err = cleanedFile.WriteString(msg)
+	if err != nil {
+		zap.L().Fatal("failed to write to file", zap.Error(err))
+	}
+
+	zap.L().Info("cleaned message saved to file")
 }
