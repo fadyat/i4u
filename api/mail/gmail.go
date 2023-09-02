@@ -2,10 +2,10 @@ package mail
 
 import (
 	"context"
+	"fmt"
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/cmd/i4u/token"
 	"github.com/fadyat/i4u/internal/entity"
-	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
@@ -17,11 +17,37 @@ type GmailClient struct {
 	s           *gmail.Service
 }
 
+func (g *GmailClient) LabelMsg(
+	ctx context.Context, msg entity.MessageForLabeler,
+) error {
+	if err := g.refreshToken(ctx); err != nil {
+		return fmt.Errorf("failed to refresh access token: %s", err)
+	}
+
+	_, err := g.s.Users.Messages.Modify(
+		"me",
+		msg.ID(),
+		&gmail.ModifyMessageRequest{
+			AddLabelIds: []string{msg.Label()},
+		},
+	).Do()
+
+	return err
+}
+
+func (g *GmailClient) CreateLabel(ctx context.Context, label string) (*gmail.Label, error) {
+	if err := g.refreshToken(ctx); err != nil {
+		return nil, fmt.Errorf("failed to refresh access token: %s", err)
+	}
+
+	return g.s.Users.Labels.Create("me", &gmail.Label{Name: label}).Do()
+}
+
 func NewGmailClient(
-	token *oauth2.Token,
+	tkn *oauth2.Token,
 	oauthConfig *oauth2.Config,
 ) api.Mail {
-	return &GmailClient{token: token, oauthConfig: oauthConfig}
+	return &GmailClient{token: tkn, oauthConfig: oauthConfig}
 }
 
 func (g *GmailClient) refreshToken(ctx context.Context) error {
@@ -34,7 +60,11 @@ func (g *GmailClient) refreshToken(ctx context.Context) error {
 		g.s, _ = gmail.NewService(
 			context.Background(),
 			option.WithTokenSource(oauth2.StaticTokenSource(newToken)),
-			option.WithScopes(gmail.GmailReadonlyScope),
+			option.WithScopes(
+				gmail.GmailReadonlyScope,
+				gmail.GmailLabelsScope,
+				gmail.GmailModifyScope,
+			),
 		)
 	}
 
@@ -42,41 +72,38 @@ func (g *GmailClient) refreshToken(ctx context.Context) error {
 	return token.Save("token.json", newToken)
 }
 
-func (g *GmailClient) GetUnreadMsgs(ctx context.Context) {
+func (g *GmailClient) GetUnreadMsgs(ctx context.Context) ([]*gmail.Message, error) {
 	if err := g.refreshToken(ctx); err != nil {
-		zap.L().Error("failed to refresh token", zap.Error(err))
-		return
+		return nil, fmt.Errorf("failed to refresh access token: %s", err)
 	}
 
-	msgs, err := g.getUnreadMsgs()
+	msgs, err := g.getUnreadMsgs(ctx)
 	if err != nil {
-		zap.L().Error("failed to get unread messages", zap.Error(err))
-		return
+		return nil, fmt.Errorf("failed to get unread messages: %s", err)
 	}
 
-	for _, msg := range msgs {
-		customMsg, e := entity.NewMsgFromGmailMessage(msg)
-		if e != nil {
-			zap.L().Error("failed to create custom message", zap.Error(e))
-			return
-		}
-
-		zap.L().Info("new unread message", zap.Any("message", customMsg))
-
-		// todo: put message to queue
-		// todo: add label to message
-	}
+	return msgs, nil
 }
 
-func (g *GmailClient) getUnreadMsgs() ([]*gmail.Message, error) {
-	unread, err := g.s.Users.Messages.List("me").MaxResults(5).Do()
+func (g *GmailClient) getUnreadMsgs(ctx context.Context) ([]*gmail.Message, error) {
+	unread, err := g.s.Users.Messages.List("me").
+		Q("in:inbox -label:i4u").
+		MaxResults(1).
+		Context(ctx).
+		Do()
+
 	if err != nil {
 		return nil, err
 	}
 
 	var msgs = make([]*gmail.Message, len(unread.Messages))
 	for i, msg := range unread.Messages {
-		msgs[i], err = g.s.Users.Messages.Get("me", msg.Id).Format("full").Do()
+		// todo: do in parallel
+		msgs[i], err = g.s.Users.Messages.Get("me", msg.Id).
+			Format("full").
+			Context(ctx).
+			Do()
+
 		if err != nil {
 			return nil, err
 		}

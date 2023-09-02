@@ -8,6 +8,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
 	"os"
+	"path/filepath"
 )
 
 func GetOAuthConfig(cfg *config.Gmail) *oauth2.Config {
@@ -16,7 +17,8 @@ func GetOAuthConfig(cfg *config.Gmail) *oauth2.Config {
 		zap.L().Fatal("failed to read credentials file", zap.Error(err))
 	}
 
-	oauth2Config, err := google.ConfigFromJSON(clientCreds, gmail.GmailReadonlyScope)
+	scopes := []string{gmail.GmailReadonlyScope, gmail.GmailLabelsScope, gmail.GmailModifyScope}
+	oauth2Config, err := google.ConfigFromJSON(clientCreds, scopes...)
 	if err != nil {
 		zap.L().Fatal("failed to parse credentials", zap.Error(err))
 	}
@@ -25,7 +27,7 @@ func GetOAuthConfig(cfg *config.Gmail) *oauth2.Config {
 }
 
 func ReadTokenFromFile(tokenFile string) (*oauth2.Token, error) {
-	f, err := os.Open(tokenFile)
+	f, err := os.Open(filepath.Clean(tokenFile))
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +46,7 @@ func ReadTokenFromFile(tokenFile string) (*oauth2.Token, error) {
 }
 
 func Save(tokenFile string, token *oauth2.Token) error {
-	f, err := os.Create(tokenFile)
+	f, err := os.Create(filepath.Clean(tokenFile))
 	if err != nil {
 		return err
 	}

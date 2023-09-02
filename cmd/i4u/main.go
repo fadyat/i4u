@@ -11,7 +11,7 @@ import (
 func init() {
 	log.SetFlags(0)
 
-	var lg, _ = zap.NewProduction()
+	var lg, _ = zap.NewDevelopment()
 	zap.ReplaceGlobals(lg)
 
 	_ = godotenv.Load(".env")
@@ -30,7 +30,16 @@ func main() {
 		zap.L().Fatal("failed to initialize gpt config", zap.Error(err))
 	}
 
-	cmd := commands.Init(gmailConfig, gptConfig)
+	tgConfig, err := config.NewTelegram()
+	if err != nil {
+		zap.L().Fatal("failed to initialize telegram config", zap.Error(err))
+	}
+
+	if err = config.NewFeatureFlags(); err != nil {
+		zap.L().Fatal("failed to initialize feature flags", zap.Error(err))
+	}
+
+	cmd := commands.Init(gmailConfig, gptConfig, tgConfig)
 	if e := cmd.Execute(); e != nil {
 		zap.L().Fatal("failed to execute command", zap.Error(e))
 	}
