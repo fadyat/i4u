@@ -7,6 +7,7 @@ import (
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
+	"time"
 )
 
 type SummarizerJob struct {
@@ -36,8 +37,12 @@ func (s *SummarizerJob) Run(ctx context.Context) {
 	for {
 		select {
 		case msg := <-s.in:
-			// todo: add cancellation for context
-			s.summary(ctx, msg)
+			go func() {
+				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+
+				s.summary(timeout, msg)
+			}()
 		case <-ctx.Done():
 			return
 		}
@@ -57,15 +62,10 @@ func (s *SummarizerJob) summary(ctx context.Context, msg entity.Message) {
 
 	summary, err := s.client.GetMsgSummary(ctx, msg)
 	if err != nil {
-		s.errsCh <- fmt.Errorf("failed to get msg summary: %s", err)
+		s.errsCh <- fmt.Errorf("failed to get msg summary: %w", err)
 		return
 	}
 
 	zap.S().Debugf("got summary for message %s", msg.ID())
-
-	// todo: think about models management
-	s.out <- entity.SummaryMsg{
-		Message: msg,
-		Summary: summary,
-	}
+	s.out <- *entity.NewSummaryMsg(msg, summary)
 }

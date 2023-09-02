@@ -9,14 +9,13 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
-// MessageFetcherJob is the job responsible for fetching new messages
-// from mail provider, gmail in current case.
+// MessageFetcherJob is the job responsible for fetching and
+// parsing messages from the mail client.
+//
+// After parsing, the job will push the message to the next
+// jobs in the pipeline.
 type MessageFetcherJob struct {
 	client api.Mail
-
-	// After message get processed it pushing it to few channels:
-	// - labeler channel
-	// - analyzer channel
 	out    []chan<- entity.Message
 	errsCh chan<- error
 }
