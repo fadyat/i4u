@@ -2,7 +2,6 @@
 
 
 function i4u() {
-  export "$(grep -v "^#" .env | xargs)"
   ./bin/i4u "$@"
 }
 

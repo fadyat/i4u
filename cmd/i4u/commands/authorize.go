@@ -15,18 +15,19 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 )
 
-func openBrowser(url string) error {
+func openBrowser(u string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		cmd = exec.Command("cmd", "/c", "start", u)
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", u)
 	default:
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", u)
 	}
 
 	return cmd.Start()
@@ -36,7 +37,7 @@ func authorize(gmailConfig *config.Gmail) *cobra.Command {
 	var oauth2Config = token.GetOAuthConfig(gmailConfig)
 
 	return &cobra.Command{
-		Use:   "init",
+		Use:   "auth",
 		Args:  cobra.NoArgs,
 		Short: "Grant access to your Gmail account to i4u",
 		Long: `
@@ -60,7 +61,11 @@ authenticate again.`,
 				}
 			}()
 
-			localServer := &http.Server{Addr: ":80"}
+			localServer := &http.Server{
+				Addr:         ":80",
+				ReadTimeout:  5 * time.Second,
+				WriteTimeout: 5 * time.Second,
+			}
 			go func() {
 				callback, err := url.Parse(oauth2Config.RedirectURL)
 				if err != nil {

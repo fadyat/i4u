@@ -20,10 +20,10 @@ func (s *statusMsg) String() string {
 		emotion = "😢"
 	}
 
-	return strings.Join([]string{
-		fmt.Sprintf("Status: %-6s", emotion),
-		fmt.Sprintf("Token Path: %-20s", s.tokenPath),
-	}, "\n")
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Status: %-6s\n", emotion))
+	sb.WriteString(fmt.Sprintf("Token Path: %-20s\n", s.tokenPath))
+	return sb.String()
 }
 
 func status(cfg *config.Gmail) *cobra.Command {
