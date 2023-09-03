@@ -63,9 +63,9 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 	}
 
 	// todo: get from config
-	var isInternLabel = "Label_5"
+	var isInternLabel = "Label_11"
 	if isIntern {
-		isInternLabel = "Label_6"
+		isInternLabel = "Label_13"
 	}
 
 	msg = msg.(*entity.Msg).Copy().WithIsIntern(isIntern).

@@ -7,6 +7,7 @@ import (
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
+	"time"
 )
 
 type LabelerJob struct {
@@ -32,8 +33,12 @@ func (l *LabelerJob) Run(ctx context.Context) {
 	for {
 		select {
 		case msg := <-l.in:
-			// todo: add cancellation for context
-			l.labeling(ctx, msg)
+			go func() {
+				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+
+				l.labeling(timeout, msg)
+			}()
 		case <-ctx.Done():
 			return
 		}
@@ -47,7 +52,7 @@ func (l *LabelerJob) labeling(ctx context.Context, msg entity.Message) {
 	}
 
 	if err := l.client.LabelMsg(ctx, msg); err != nil {
-		l.errsCh <- fmt.Errorf("labeling failed with: %s", err)
+		l.errsCh <- fmt.Errorf("labeling failed with: %w", err)
 		return
 	}
 
