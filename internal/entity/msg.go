@@ -10,6 +10,11 @@ type MessageForLabeler interface {
 	Label() string
 }
 
+type MessageWithError struct {
+	Msg Message
+	Err error
+}
+
 type Message interface {
 	Body() string
 	IsInternshipRequest() bool
@@ -81,20 +86,34 @@ func NewMsgFromGmailMessage(msg *gmail.Message) (*Msg, error) {
 	}, nil
 }
 
+func NewMsg(
+	id, label, body string,
+	isInternshipRequest bool,
+) *Msg {
+	return &Msg{
+		id:                  id,
+		body:                body,
+		isInternshipRequest: isInternshipRequest,
+		label:               label,
+	}
+}
+
 func (m *Msg) ID() string {
 	return m.id
 }
 
 func (m *Msg) Label() string {
-	if m.label == "" {
-		// todo: get label name from config
-		return "Label_7"
-	}
-
 	return m.label
 }
 
 type SummaryMsg struct {
 	Message
 	Summary string
+}
+
+func NewSummaryMsg(msg Message, summary string) *SummaryMsg {
+	return &SummaryMsg{
+		Message: msg,
+		Summary: summary,
+	}
 }

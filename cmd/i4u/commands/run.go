@@ -54,7 +54,7 @@ to avoid processing it again.
 			defer close(signalChan)
 
 			producer := job.NewProducer(
-				mail.NewGmailClient(staticToken, oauth2Config),
+				mail.NewGmailClient(staticToken, oauth2Config, gmailConfig),
 				// todo: get from config
 				analyzer.NewKWAnalyzer([]string{
 					"internship",

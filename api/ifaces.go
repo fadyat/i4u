@@ -3,13 +3,12 @@ package api
 import (
 	"context"
 	"github.com/fadyat/i4u/internal/entity"
-	"google.golang.org/api/gmail/v1"
 )
 
 type Mail interface {
-	GetUnreadMsgs(context.Context) ([]*gmail.Message, error) // todo: make an interface for gmail message
+	GetUnreadMsgs(ctx context.Context) <-chan entity.MessageWithError
 	LabelMsg(context.Context, entity.MessageForLabeler) error
-	CreateLabel(context.Context, string) (*gmail.Label, error) // todo: make an interface for gmail label
+	CreateLabel(context.Context, string) (*entity.Label, error)
 }
 
 type Analyzer interface {
