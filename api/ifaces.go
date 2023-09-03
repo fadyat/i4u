@@ -20,5 +20,5 @@ type Summarizer interface {
 }
 
 type Sender interface {
-	Send(context.Context, *entity.SummaryMsg) error
+	Send(context.Context, entity.SummaryMessage) error
 }

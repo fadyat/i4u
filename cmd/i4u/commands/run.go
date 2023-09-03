@@ -8,6 +8,7 @@ import (
 	"github.com/fadyat/i4u/api/summary"
 	"github.com/fadyat/i4u/cmd/i4u/token"
 	"github.com/fadyat/i4u/internal/config"
+	"github.com/fadyat/i4u/internal/entity"
 	"github.com/fadyat/i4u/internal/job"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sashabaranov/go-openai"
@@ -53,6 +54,18 @@ to avoid processing it again.
 			signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 			defer close(signalChan)
 
+			alertsNotifierTg := sender.NewTg(
+				func() *tgbotapi.BotAPI {
+					bot, e := tgbotapi.NewBotAPI(tgConfig.Token)
+					if e != nil {
+						log.Fatal(e)
+					}
+
+					return bot
+				}(),
+				tgConfig.AlertsChatID,
+			)
+
 			producer := job.NewProducer(
 				mail.NewGmailClient(staticToken, oauth2Config, gmailConfig),
 				// todo: get from config
@@ -75,7 +88,7 @@ to avoid processing it again.
 
 						return bot
 					}(),
-					tgConfig,
+					tgConfig.ChatID,
 				),
 			)
 
@@ -86,9 +99,11 @@ to avoid processing it again.
 			go func() {
 				defer wg.Done()
 
-				errsCh := producer.Produce(ctx)
-				for e := range errsCh {
+				for e := range producer.Produce(ctx) {
 					zap.L().Error("got error during processing", zap.Error(e))
+					if er := alertsNotifierTg.Send(ctx, entity.NewAlertMsg(e)); er != nil {
+						zap.L().Error("failed to send alert", zap.Error(er))
+					}
 				}
 			}()
 
