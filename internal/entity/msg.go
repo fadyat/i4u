@@ -10,6 +10,11 @@ type MessageForLabeler interface {
 	Label() string
 }
 
+type MessageWithError struct {
+	Msg Message
+	Err error
+}
+
 type Message interface {
 	Body() string
 	IsInternshipRequest() bool
@@ -98,11 +103,6 @@ func (m *Msg) ID() string {
 }
 
 func (m *Msg) Label() string {
-	if m.label == "" {
-		// todo: get label name from config
-		return "Label_12"
-	}
-
 	return m.label
 }
 

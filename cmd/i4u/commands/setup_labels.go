@@ -8,6 +8,7 @@ import (
 	"github.com/fadyat/i4u/cmd/i4u/token"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 	"log"
 	"sync"
 )
@@ -55,8 +56,8 @@ labels if they don't exist:
 						return
 					}
 
-					withLock(func() { labels[l] = lbl.Id })
-					log.Printf("created label: %s: %s", lbl.Name, lbl.Id)
+					withLock(func() { labels[l] = lbl.ID })
+					zap.S().Infof("created label: %s", l)
 				}(label)
 			}
 
@@ -70,7 +71,7 @@ labels if they don't exist:
 			}
 
 			if e := setupConfig.SaveLabelsToYaml(".i4u/config.yaml", labels); e != nil {
-				log.Fatalf("failed to save labels to config file: %v", e)
+				log.Printf("failed to save labels to config file: %v", e)
 			}
 		},
 	}

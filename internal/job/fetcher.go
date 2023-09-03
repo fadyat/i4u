@@ -6,7 +6,6 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
-	"google.golang.org/api/gmail/v1"
 )
 
 // MessageFetcherJob is the job responsible for fetching and
@@ -33,41 +32,20 @@ func NewFetcherJob(
 }
 
 func (m *MessageFetcherJob) Run(ctx context.Context) {
-	msgs, err := m.run(ctx)
-	if err != nil {
-		m.errsCh <- err
-		return
+	for wrap := range m.client.GetUnreadMsgs(ctx) {
+		if wrap.Err != nil {
+			m.errsCh <- fmt.Errorf("failed to fetch message: %w", wrap.Err)
+			continue
+		}
+
+		m.pushSingle(wrap.Msg)
 	}
 
-	for _, msg := range msgs {
-		m.pushSingle(msg)
-	}
+	zap.S().Debugf("current stage for fetching messages is done")
 }
 
-func (m *MessageFetcherJob) parseMsg(msg *gmail.Message) (entity.Message, error) {
-	parsed, err := entity.NewMsgFromGmailMessage(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse message: %s", err)
-	}
-
-	zap.S().Debugf("parsed message: %s", parsed.ID())
-	return parsed, nil
-}
-
-func (m *MessageFetcherJob) pushSingle(msg *gmail.Message) {
-	parsed, err := m.parseMsg(msg)
-	if err != nil {
-		m.errsCh <- err
-		return
-	}
-
+func (m *MessageFetcherJob) pushSingle(msg entity.Message) {
 	for _, o := range m.out {
-		go func(o chan<- entity.Message) { o <- parsed }(o)
+		go func(o chan<- entity.Message) { o <- msg }(o)
 	}
-}
-
-func (m *MessageFetcherJob) run(ctx context.Context) ([]*gmail.Message, error) {
-	msgs, err := m.client.GetUnreadMsgs(ctx)
-	zap.S().Debugf("got %d messages", len(msgs))
-	return msgs, err
 }

@@ -28,6 +28,9 @@ type Gmail struct {
 		NotIntern string `yaml:"intern:false"`
 		IsIntern  string `yaml:"intern:true"`
 	} `yaml:"labels"`
+
+	// MessagesLimit is a batch size for fetching messages from Gmail.
+	MessagesLimit int64 `env:"GMAIL_MESSAGES_LIMIT" env-description:"Batch size for fetching messages" env-default:"2"`
 }
 
 func NewGmail() (*Gmail, error) {
