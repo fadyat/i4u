@@ -101,6 +101,8 @@ to avoid processing it again.
 
 				for e := range producer.Produce(ctx) {
 					zap.L().Error("got error during processing", zap.Error(e))
+
+					// todo: rewrite this to api.Sender
 					if er := alertsNotifierTg.Send(ctx, entity.NewAlertMsg(e)); er != nil {
 						zap.L().Error("failed to send alert", zap.Error(er))
 					}
