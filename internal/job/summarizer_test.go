@@ -5,34 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fadyat/i4u/api"
-	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"github.com/fadyat/i4u/mocks"
 	"github.com/fadyat/i4u/pkg/syncs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"go.uber.org/zap"
-	"strconv"
 	"testing"
 )
-
-func setup() {
-	lg, _ := zap.NewDevelopment()
-	zap.ReplaceGlobals(lg)
-
-	config.FeatureFlags = config.Flags{
-		IsSummarizerJobEnabled: true,
-	}
-}
-
-func parseInt(t *testing.T, s string) int {
-	i, err := strconv.Atoi(s)
-	if err != nil {
-		assert.Fail(t, fmt.Sprintf("failed to parse int: %s", err))
-	}
-
-	return i
-}
 
 type summaryJobTestcase struct {
 	name          string
@@ -43,8 +22,6 @@ type summaryJobTestcase struct {
 }
 
 func TestSummarizerJob_Run(t *testing.T) {
-	setup()
-
 	testCases := []summaryJobTestcase{
 		{
 			name: "context deadline",
@@ -137,19 +114,21 @@ func TestSummarizerJob_Run(t *testing.T) {
 			errsCh, in, out := make(chan error), make(chan entity.Message), make(chan entity.SummaryMsg)
 			defer close(in)
 
-			client := mocks.NewSummarizer(t)
-			tc.pre(t, client, tc)
+			summarizer := mocks.NewSummarizer(t)
+			tc.pre(t, summarizer, tc)
 
-			jobContext, cancelJob := context.WithCancel(context.Background())
-			var jobWg syncs.WaitGroup
+			var (
+				jobWg                 syncs.WaitGroup
+				inputWg               syncs.WaitGroup
+				jobContext, cancelJob = context.WithCancel(context.Background())
+			)
 			jobWg.Go(func() {
 				defer close(out)
 				defer close(errsCh)
 
-				NewSummarizerJob(client, errsCh, in, out).Run(jobContext)
+				NewSummarizerJob(summarizer, errsCh, in, out).Run(jobContext)
 			})
 
-			var inputWg syncs.WaitGroup
 			for _, msg := range tc.in {
 				m := msg
 				inputWg.Go(func() { in <- m })
@@ -184,7 +163,7 @@ func TestSummarizerJob_Run(t *testing.T) {
 			jobWg.Wait()
 			cancelVerify()
 
-			client.AssertExpectations(t)
+			summarizer.AssertExpectations(t)
 		})
 	}
 }
