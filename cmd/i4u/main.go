@@ -39,7 +39,12 @@ func main() {
 		zap.L().Fatal("failed to initialize feature flags", zap.Error(err))
 	}
 
-	cmd := commands.Init(gmailConfig, gptConfig, tgConfig)
+	appConfig, err := config.NewAppConfig()
+	if err != nil {
+		zap.L().Fatal("failed to initialize app config", zap.Error(err))
+	}
+
+	cmd := commands.Init(gmailConfig, gptConfig, tgConfig, appConfig)
 	if e := cmd.Execute(); e != nil {
 		zap.L().Fatal("failed to execute command", zap.Error(e))
 	}

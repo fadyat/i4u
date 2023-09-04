@@ -9,6 +9,7 @@ func Init(
 	gmailConfig *config.Gmail,
 	gptConfig *config.GPT,
 	tgConfig *config.Telegram,
+	appConfig *config.AppConfig,
 ) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "i4u",
@@ -16,11 +17,11 @@ func Init(
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
-		Version: "v0.0.1",
+		Version: appConfig.Version,
 	}
 
 	rootCmd.AddCommand(authorize(gmailConfig))
-	rootCmd.AddCommand(run(gmailConfig, gptConfig, tgConfig))
+	rootCmd.AddCommand(run(gmailConfig, gptConfig, tgConfig, appConfig))
 	rootCmd.AddCommand(status(gmailConfig))
 	rootCmd.AddCommand(analyze(gptConfig))
 	rootCmd.AddCommand(setupLabels(gmailConfig))
