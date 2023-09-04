@@ -11,7 +11,8 @@ import (
 )
 
 type MessageAnalyzerJob struct {
-	client api.Analyzer
+	client       api.Analyzer
+	labelsMapper *config.LabelsMapper
 
 	in  <-chan entity.Message
 	out []chan<- entity.Message
@@ -21,15 +22,17 @@ type MessageAnalyzerJob struct {
 
 func NewAnalyzerJob(
 	analyzer api.Analyzer,
+	labels *config.LabelsMapper,
 	errsCh chan<- error,
 	in <-chan entity.Message,
 	out []chan<- entity.Message,
 ) Job {
 	return &MessageAnalyzerJob{
-		client: analyzer,
-		in:     in,
-		out:    out,
-		errsCh: errsCh,
+		client:       analyzer,
+		labelsMapper: labels,
+		in:           in,
+		out:          out,
+		errsCh:       errsCh,
 	}
 }
 
@@ -59,7 +62,7 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 	// error may happen, when you have dialog with someone, and you reply to
 	// the message.
 	// because, parsing don't work well with that.
-	if len(msg.Body()) == 0 {
+	if msg.Body() == "" {
 		m.errsCh <- fmt.Errorf("got empty body for message: %s", msg.Link())
 		return
 	}
@@ -76,14 +79,8 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 		return
 	}
 
-	// todo: get from config
-	var isInternLabel = "Label_10"
-	if isIntern {
-		isInternLabel = "Label_8"
-	}
-
 	msg = msg.(*entity.Msg).Copy().WithIsIntern(isIntern).
-		WithLabel(isInternLabel)
+		WithLabel(m.labelsMapper.GetInternLabel(isIntern))
 
 	zap.S().Debugf("analyzed message: %s, isIntern: %v", msg.ID(), isIntern)
 	for _, o := range m.out {

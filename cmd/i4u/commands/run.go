@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/api/analyzer"
 	"github.com/fadyat/i4u/api/mail"
 	"github.com/fadyat/i4u/api/sender"
@@ -25,6 +26,7 @@ func run(
 	gmailConfig *config.Gmail,
 	gptConfig *config.GPT,
 	tgConfig *config.Telegram,
+	appConfig *config.AppConfig,
 ) *cobra.Command {
 	var oauth2Config = token.GetOAuthConfig(gmailConfig)
 
@@ -41,7 +43,7 @@ or not.
 If current unread message is an internship request, it will
 be added to the tracker queue for further processing.
 
-When message is processed, it will get an label "i4u-processed"
+When message is processed, it will get an label "i4u"
 to avoid processing it again.
 `,
 		Run: func(cmd *cobra.Command, _ []string) {
@@ -54,7 +56,7 @@ to avoid processing it again.
 			signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 			defer close(signalChan)
 
-			alertsNotifierTg := sender.NewTg(
+			var alertsNotifier api.Sender = sender.NewTg(
 				func() *tgbotapi.BotAPI {
 					bot, e := tgbotapi.NewBotAPI(tgConfig.Token)
 					if e != nil {
@@ -68,17 +70,8 @@ to avoid processing it again.
 
 			producer := job.NewProducer(
 				mail.NewGmailClient(staticToken, oauth2Config, gmailConfig),
-				// todo: get from config
-				analyzer.NewKWAnalyzer([]string{
-					"internship",
-					"opportunity",
-					"training",
-					"intern",
-				}),
-				summary.NewOpenAI(
-					openai.NewClient(gptConfig.OpenAIKey),
-					gptConfig,
-				),
+				analyzer.NewKWAnalyzer(appConfig.Keywords),
+				summary.NewOpenAI(openai.NewClient(gptConfig.OpenAIKey), gptConfig),
 				sender.NewTg(
 					func() *tgbotapi.BotAPI {
 						bot, e := tgbotapi.NewBotAPI(tgConfig.Token)
@@ -90,6 +83,7 @@ to avoid processing it again.
 					}(),
 					tgConfig.ChatID,
 				),
+				gmailConfig.L,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -102,8 +96,7 @@ to avoid processing it again.
 				for e := range producer.Produce(ctx) {
 					zap.L().Error("got error during processing", zap.Error(e))
 
-					// todo: rewrite this to api.Sender
-					if er := alertsNotifierTg.Send(ctx, entity.NewAlertMsg(e)); er != nil {
+					if er := alertsNotifier.Send(ctx, entity.NewAlertMsg(e)); er != nil {
 						zap.L().Error("failed to send alert", zap.Error(er))
 					}
 				}
