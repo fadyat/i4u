@@ -17,5 +17,6 @@ test:
 mocks:
 	@mockery --dir api --output mocks --filename summary.go --name Summarizer
 	@mockery --dir api --output mocks --filename sender.go --name Sender
+	@mockery --dir api --output mocks --filename mail.go --name Mail
 
 .PHONY: cli lint mocks test
