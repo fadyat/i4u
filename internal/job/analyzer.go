@@ -7,6 +7,7 @@ import (
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
+	"time"
 )
 
 type MessageAnalyzerJob struct {
@@ -36,8 +37,12 @@ func (m *MessageAnalyzerJob) Run(ctx context.Context) {
 	for {
 		select {
 		case msg := <-m.in:
-			// todo: add cancellation of context?
-			m.analyze(ctx, msg)
+			go func() {
+				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+
+				m.analyze(timeout, msg)
+			}()
 		case <-ctx.Done():
 			return
 		}
@@ -50,9 +55,18 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 		return
 	}
 
+	// notifying the user that the message is empty, and we can't analyze it
+	// error may happen, when you have dialog with someone, and you reply to
+	// the message.
+	// because, parsing don't work well with that.
+	if len(msg.Body()) == 0 {
+		m.errsCh <- fmt.Errorf("got empty body for message: %s", msg.Link())
+		return
+	}
+
 	isIntern, err := m.client.IsInternshipRequest(ctx, msg)
 	if err != nil {
-		m.errsCh <- fmt.Errorf("failed to analyze message: %s", err)
+		m.errsCh <- fmt.Errorf("failed to analyze message: %w", err)
 		return
 	}
 
@@ -63,9 +77,9 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 	}
 
 	// todo: get from config
-	var isInternLabel = "Label_11"
+	var isInternLabel = "Label_10"
 	if isIntern {
-		isInternLabel = "Label_13"
+		isInternLabel = "Label_8"
 	}
 
 	msg = msg.(*entity.Msg).Copy().WithIsIntern(isIntern).

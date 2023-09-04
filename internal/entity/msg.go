@@ -18,6 +18,7 @@ type MessageWithError struct {
 type Message interface {
 	Body() string
 	IsInternshipRequest() bool
+	Link() string
 
 	MessageForLabeler
 }
@@ -44,6 +45,11 @@ type Msg struct {
 	// Be default, it is empty, and will be replaced with `i4u` tag.
 	// For another cases, like, second labeling, you can provide custom value.
 	label string
+
+	// link is a fast-access link to the message.
+	//
+	// For gmail, it's done via `https://mail.google.com/mail/u/0/#inbox/` + id.
+	link string
 }
 
 func (m *Msg) Body() string {
@@ -54,12 +60,17 @@ func (m *Msg) IsInternshipRequest() bool {
 	return m.isInternshipRequest
 }
 
+func (m *Msg) Link() string {
+	return m.link
+}
+
 func (m *Msg) Copy() *Msg {
 	return &Msg{
 		id:                  m.id,
 		body:                m.body,
 		isInternshipRequest: m.isInternshipRequest,
 		label:               m.label,
+		link:                m.link,
 	}
 }
 
@@ -83,6 +94,7 @@ func NewMsgFromGmailMessage(msg *gmail.Message) (*Msg, error) {
 		id:                  msg.Id,
 		body:                content,
 		isInternshipRequest: false,
+		link:                "https://mail.google.com/mail/u/0/#inbox/" + msg.Id,
 	}, nil
 }
 
@@ -104,36 +116,4 @@ func (m *Msg) ID() string {
 
 func (m *Msg) Label() string {
 	return m.label
-}
-
-type SummaryMessage interface {
-	Summary() string
-}
-
-type SummaryMsg struct {
-	Message
-	summary string
-}
-
-type AlertMsg struct {
-	err error
-}
-
-func NewAlertMsg(err error) *AlertMsg {
-	return &AlertMsg{err: err}
-}
-
-func (a *AlertMsg) Summary() string {
-	return a.err.Error()
-}
-
-func NewSummaryMsg(msg Message, summary string) *SummaryMsg {
-	return &SummaryMsg{
-		Message: msg,
-		summary: summary,
-	}
-}
-
-func (s *SummaryMsg) Summary() string {
-	return s.summary
 }
