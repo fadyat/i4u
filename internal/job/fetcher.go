@@ -6,13 +6,9 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
+	"time"
 )
 
-// MessageFetcherJob is the job responsible for fetching and
-// parsing messages from the mail client.
-//
-// After parsing, the job will push the message to the next
-// jobs in the pipeline.
 type MessageFetcherJob struct {
 	client api.Mail
 	out    []chan<- entity.Message
@@ -31,8 +27,13 @@ func NewFetcherJob(
 	}
 }
 
+// Run launches the stage of fetching messages from the mail client
+// with parsing to the internal message format.
 func (m *MessageFetcherJob) Run(ctx context.Context) {
-	for wrap := range m.client.GetUnreadMsgs(ctx) {
+	timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	for wrap := range m.client.GetUnreadMsgs(timeout) {
 		if wrap.Err != nil {
 			m.errsCh <- fmt.Errorf("failed to fetch message: %w", wrap.Err)
 			continue
@@ -41,11 +42,15 @@ func (m *MessageFetcherJob) Run(ctx context.Context) {
 		m.pushSingle(wrap.Msg)
 	}
 
-	zap.S().Debugf("current stage for fetching messages is done")
+	zap.S().Debug("message fetcher job finished")
 }
 
+// pushSingle pushes the message to all channels in separate goroutines,
+// to avoid blocking the main thread.
 func (m *MessageFetcherJob) pushSingle(msg entity.Message) {
 	for _, o := range m.out {
 		go func(o chan<- entity.Message) { o <- msg }(o)
 	}
+
+	zap.S().Debugf("message %s was pushed to the next stage", msg.ID())
 }

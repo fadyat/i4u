@@ -56,7 +56,7 @@ func (s *SummarizerJob) Run(ctx context.Context) {
 // summarizer API. It then sends the summary to the output channel.
 func (s *SummarizerJob) summary(ctx context.Context, msg entity.Message) {
 	if !config.FeatureFlags.IsSummarizerJobEnabled {
-		zap.S().Debugf("got message %v, but summarizer job is disabled", msg)
+		zap.S().Debugf("got message %s, but summarizer job is disabled", msg.ID())
 		return
 	}
 

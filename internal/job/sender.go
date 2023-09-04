@@ -54,7 +54,7 @@ func (s *SenderJob) Run(ctx context.Context) {
 // analyzed and summarized.
 func (s *SenderJob) send(ctx context.Context, msg *entity.SummaryMsg) {
 	if !config.FeatureFlags.IsSenderJobEnabled {
-		zap.S().Debugf("got message %v, but sender job is disabled", msg)
+		zap.S().Debugf("got message %s, but sender job is disabled", msg.ID())
 		return
 	}
 
