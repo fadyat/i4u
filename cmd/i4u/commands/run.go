@@ -107,6 +107,7 @@ to avoid processing it again.
 			cancel()
 
 			wg.Wait()
+			zap.L().Info("exiting")
 		},
 	}
 }

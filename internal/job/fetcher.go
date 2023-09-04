@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"time"
 )
 
 type MessageFetcherJob struct {
 	client api.Mail
+	period time.Duration
 
 	out    []chan<- entity.Message
 	errsCh chan<- error
@@ -18,23 +20,43 @@ type MessageFetcherJob struct {
 
 func NewFetcherJob(
 	mailClient api.Mail,
+	period time.Duration,
 	errsCh chan<- error,
 	out []chan<- entity.Message,
 ) Job {
 	return &MessageFetcherJob{
 		client: mailClient,
+		period: period,
 		errsCh: errsCh,
 		out:    out,
 	}
 }
 
-// Run launches the stage of fetching messages from the mail client
-// with parsing to the internal message format.
 func (m *MessageFetcherJob) Run(ctx context.Context) {
-	timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	ticker := time.NewTicker(m.period)
+	defer ticker.Stop()
 
-	for wrap := range m.client.GetUnreadMsgs(timeout) {
+	var wg syncs.WaitGroup
+	for {
+		select {
+		case <-ticker.C:
+			wg.Go(func() {
+				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel()
+
+				m.fetch(timeout)
+			})
+		case <-ctx.Done():
+			wg.Wait()
+			return
+		}
+	}
+}
+
+// fetch getting unread messages from mail provider and push them to the next stage
+// with parsing to the internal message format.
+func (m *MessageFetcherJob) fetch(ctx context.Context) {
+	for wrap := range m.client.GetUnreadMsgs(ctx) {
 		if wrap.Err != nil {
 			m.errsCh <- fmt.Errorf("failed to fetch message: %w", wrap.Err)
 			continue
