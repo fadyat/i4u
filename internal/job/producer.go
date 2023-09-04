@@ -5,6 +5,7 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"time"
 )
@@ -36,18 +37,18 @@ func NewProducer(
 
 func (p *producer) Produce(ctx context.Context) <-chan error {
 	errsCh := make(chan error)
-
 	labelerChan := make(chan entity.Message)
 	analyzerChan := make(chan entity.Message)
 	summarizerChan := make(chan entity.Message)
 	senderChan := make(chan entity.SummaryMsg)
 
 	fetcherJob := NewFetcherJob(
-		p.mailClient, errsCh, []chan<- entity.Message{labelerChan, analyzerChan},
+		p.mailClient,
+		10*time.Second,
+		errsCh,
+		[]chan<- entity.Message{labelerChan, analyzerChan},
 	)
-	labelerJob := NewLabelerJob(
-		p.mailClient, errsCh, labelerChan,
-	)
+	labelerJob := NewLabelerJob(p.mailClient, errsCh, labelerChan)
 	analyzerJob := NewAnalyzerJob(
 		p.analyzerClient,
 		p.labelsMapper,
@@ -55,62 +56,44 @@ func (p *producer) Produce(ctx context.Context) <-chan error {
 		analyzerChan,
 		[]chan<- entity.Message{summarizerChan, labelerChan},
 	)
-	summarizerJob := NewSummarizerJob(
-		p.summarizer, errsCh, summarizerChan, senderChan,
-	)
-	senderJob := NewSenderJob(
-		p.sender, errsCh, senderChan,
-	)
+	summarizerJob := NewSummarizerJob(p.summarizer, errsCh, summarizerChan, senderChan)
+	senderJob := NewSenderJob(p.sender, errsCh, senderChan)
+
+	var jobsWg syncs.WaitGroup
+	jobs := []struct {
+		Job
+		name    string
+		deferFn func()
+	}{
+		{fetcherJob, "fetcher", func() {}},
+		{labelerJob, "labeler", func() { close(labelerChan) }},
+		{analyzerJob, "analyzer", func() { close(analyzerChan) }},
+		{summarizerJob, "summarizer", func() { close(summarizerChan) }},
+		{senderJob, "sender", func() { close(senderChan) }},
+	}
+
+	for _, j := range jobs {
+		job := j
+
+		jobsWg.Go(func() {
+			defer func() {
+				zap.S().Infof("stopping %s job", job.name)
+				job.deferFn()
+			}()
+
+			zap.S().Infof("starting %s job", job.name)
+			job.Run(ctx)
+		})
+	}
 
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
+		defer func() {
+			zap.S().Info("closing errs channel")
+			close(errsCh)
+		}()
 
-		zap.S().Info("starting fetcher job")
-		for {
-			select {
-			case <-ticker.C:
-				zap.S().Debug("fetching messages")
-				fetcherJob.Run(ctx)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// todo: write in more compact way
-	//  like struct with channel and job
-	go func() {
-		defer close(labelerChan)
-
-		zap.S().Info("starting labeler job")
-		labelerJob.Run(ctx)
-	}()
-
-	go func() {
-		defer close(analyzerChan)
-
-		zap.S().Info("starting analyzer job")
-		analyzerJob.Run(ctx)
-	}()
-
-	go func() {
-		defer close(summarizerChan)
-
-		zap.S().Info("starting summarizer job")
-		summarizerJob.Run(ctx)
-	}()
-
-	go func() {
-		defer close(senderChan)
-
-		zap.S().Info("starting sender job")
-		senderJob.Run(ctx)
-	}()
-
-	go func() {
-		defer close(errsCh)
 		<-ctx.Done()
+		jobsWg.Wait()
 	}()
 
 	return errsCh

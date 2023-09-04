@@ -11,9 +11,11 @@ lint:
 	@golangci-lint run --issues-exit-code 1 --print-issued-lines=true --config .golangci.yml ./...
 
 test:
+	@go clean -testcache
 	@go test -v -cover ./...
 
 mocks:
 	@mockery --dir api --output mocks --filename summary.go --name Summarizer
+	@mockery --dir api --output mocks --filename sender.go --name Sender
 
 .PHONY: cli lint mocks test

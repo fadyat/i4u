@@ -6,6 +6,7 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"time"
 )
@@ -30,24 +31,30 @@ func NewSenderJob(
 }
 
 func (s *SenderJob) Run(ctx context.Context) {
+	var wg syncs.WaitGroup
+
 	for {
 		select {
 		case msg := <-s.in:
-			go func() {
+			wg.Go(func() {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
 				s.send(timeout, &msg)
-			}()
+			})
 		case <-ctx.Done():
+			wg.Wait()
 			return
 		}
 	}
 }
 
+// send forwards the message to the sender API, like Telegram, for example.
+// launched as a final stage of the pipeline, after the message has been
+// analyzed and summarized.
 func (s *SenderJob) send(ctx context.Context, msg *entity.SummaryMsg) {
 	if !config.FeatureFlags.IsSenderJobEnabled {
-		zap.S().Debugf("got message %v, but sender job is disabled", msg)
+		zap.S().Debugf("got message %s, but sender job is disabled", msg.ID())
 		return
 	}
 

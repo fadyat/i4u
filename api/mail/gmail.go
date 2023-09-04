@@ -7,6 +7,7 @@ import (
 	"github.com/fadyat/i4u/cmd/i4u/token"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/gmail/v1"
@@ -113,10 +114,7 @@ func (g *GmailClient) GetUnreadMsgs(ctx context.Context) <-chan entity.MessageWi
 			return
 		}
 
-		timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		if err := g.getUnreadMsgs(timeout, wrappedMsgsCh); err != nil {
+		if err := g.getUnreadMsgs(ctx, wrappedMsgsCh); err != nil {
 			wrappedMsgsCh <- entity.MessageWithError{
 				Err: fmt.Errorf("failed to get unread messages: %w", err),
 			}
@@ -179,15 +177,16 @@ func (g *GmailClient) getUnreadMsgs(
 		return err
 	}
 
-	var wg sync.WaitGroup
+	var wg syncs.WaitGroup
 	for _, msg := range unread.Messages {
-		wg.Add(1)
+		id := msg.Id
 
-		go func(id string) {
-			defer wg.Done()
+		wg.Go(func() {
+			timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-			g.getFullMessageContent(ctx, id, wrappedMsgsCh)
-		}(msg.Id)
+			g.getFullMessageContent(timeout, id, wrappedMsgsCh)
+		})
 	}
 
 	wg.Wait()

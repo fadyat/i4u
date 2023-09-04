@@ -6,6 +6,7 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"time"
 )
@@ -30,24 +31,31 @@ func NewLabelerJob(
 }
 
 func (l *LabelerJob) Run(ctx context.Context) {
+	var wg syncs.WaitGroup
+
 	for {
 		select {
 		case msg := <-l.in:
-			go func() {
+			wg.Go(func() {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
 				l.labeling(timeout, msg)
-			}()
+			})
 		case <-ctx.Done():
+			wg.Wait()
 			return
 		}
 	}
 }
 
+// labeling making api call to mail provider and labels the message
+// with the appropriate label.
+// launched when want to mark the message as read or with result
+// of the message analysis.
 func (l *LabelerJob) labeling(ctx context.Context, msg entity.Message) {
 	if !config.FeatureFlags.IsLabelerJobEnabled {
-		zap.S().Debugf("got message, but labeler job is disabled")
+		zap.S().Debugf("got message %s, but labeler job is disabled", msg.ID())
 		return
 	}
 
