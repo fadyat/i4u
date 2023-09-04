@@ -22,7 +22,6 @@ func Init(
 
 	rootCmd.AddCommand(authorize(gmailConfig))
 	rootCmd.AddCommand(run(gmailConfig, gptConfig, tgConfig, appConfig))
-	rootCmd.AddCommand(status(gmailConfig))
 	rootCmd.AddCommand(analyze(gptConfig))
 	rootCmd.AddCommand(setupLabels(gmailConfig))
 	rootCmd.AddCommand(tgChannelDescription(tgConfig))
