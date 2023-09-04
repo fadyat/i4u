@@ -11,6 +11,7 @@ import (
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"github.com/fadyat/i4u/internal/job"
+	"github.com/fadyat/i4u/pkg/syncs"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
@@ -18,7 +19,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
@@ -88,11 +88,8 @@ to avoid processing it again.
 
 			ctx, cancel := context.WithCancel(context.Background())
 
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
+			var wg syncs.WaitGroup
+			wg.Go(func() {
 				for e := range producer.Produce(ctx) {
 					zap.L().Error("got error during processing", zap.Error(e))
 
@@ -100,7 +97,7 @@ to avoid processing it again.
 						zap.L().Error("failed to send alert", zap.Error(er))
 					}
 				}
-			}()
+			})
 
 			<-signalChan
 			zap.L().Info("received signal, exiting")
