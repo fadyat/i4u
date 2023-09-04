@@ -11,6 +11,7 @@ lint:
 	@golangci-lint run --issues-exit-code 1 --print-issued-lines=true --config .golangci.yml ./...
 
 test:
+	@go clean -testcache
 	@go test -v -cover ./...
 
 mocks:

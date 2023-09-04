@@ -3,15 +3,17 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"github.com/fadyat/i4u/mocks"
+	"github.com/fadyat/i4u/pkg/syncs"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"strconv"
 	"testing"
-	"time"
 )
 
 func setup() {
@@ -23,16 +25,27 @@ func setup() {
 	}
 }
 
+func parseInt(t *testing.T, s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		assert.Fail(t, fmt.Sprintf("failed to parse int: %s", err))
+	}
+
+	return i
+}
+
+type summaryJobTestcase struct {
+	name          string
+	pre           func(t *testing.T, c api.Summarizer, tc summaryJobTestcase)
+	in            []entity.Message
+	expected      []entity.SummaryMsg
+	expectedError error
+}
+
 func TestSummarizerJob_Run(t *testing.T) {
 	setup()
 
-	testCases := []struct {
-		name           string
-		pre            func(t *testing.T, c api.Summarizer, expErr error)
-		in             []entity.Message
-		expected       []entity.SummaryMsg
-		expectedErrors []error
-	}{
+	testCases := []summaryJobTestcase{
 		{
 			name: "context deadline",
 			in: []entity.Message{
@@ -40,29 +53,29 @@ func TestSummarizerJob_Run(t *testing.T) {
 					"1", "i4u", "kek", true,
 				),
 			},
-			pre: func(t *testing.T, c api.Summarizer, expErr error) {
+			pre: func(t *testing.T, c api.Summarizer, tc summaryJobTestcase) {
 				c.(*mocks.Summarizer).On("GetMsgSummary", mock.Anything, mock.Anything).
 					Run(func(args mock.Arguments) {
 						ctx := args.Get(0).(context.Context)
 						<-ctx.Done()
-					}).Return("", expErr)
+					}).Return("", tc.expectedError)
 			},
-			expectedErrors: []error{context.DeadlineExceeded},
+			expectedError: context.DeadlineExceeded,
 		},
 		{
 			name: "summary success",
 			in: []entity.Message{
 				entity.NewMsg(
-					"1", "i4u", "kek", true,
+					"0", "i4u", "kek", true,
 				),
 			},
-			pre: func(t *testing.T, c api.Summarizer, expErr error) {
+			pre: func(t *testing.T, c api.Summarizer, tc summaryJobTestcase) {
 				c.(*mocks.Summarizer).On("GetMsgSummary", mock.Anything, mock.Anything).
-					Return("summary", expErr)
+					Return("summary", nil)
 			},
 			expected: []entity.SummaryMsg{
 				*entity.NewSummaryMsg(
-					entity.NewMsg("1", "i4u", "kek", true),
+					entity.NewMsg("0", "i4u", "kek", true),
 					"summary",
 				),
 			},
@@ -71,10 +84,47 @@ func TestSummarizerJob_Run(t *testing.T) {
 			name: "not internship request",
 			in: []entity.Message{
 				entity.NewMsg(
-					"1", "i4u", "kek", false,
+					"0", "i4u", "kek", false,
 				),
 			},
-			pre: func(t *testing.T, c api.Summarizer, expErr error) {},
+			pre: func(t *testing.T, c api.Summarizer, tc summaryJobTestcase) {},
+		},
+		{
+			name: "summary for multiple messages",
+			in: []entity.Message{
+				entity.NewMsg(
+					"0", "i4u", "kek", true,
+				),
+				entity.NewMsg(
+					"1", "i4u", "aboba", true,
+				),
+				entity.NewMsg(
+					"2", "i4u", "lol", true,
+				),
+				entity.NewMsg(
+					"3", "i4u", "no", false,
+				),
+			},
+			pre: func(t *testing.T, c api.Summarizer, tc summaryJobTestcase) {
+				for i := 0; i < len(tc.in)-1; i++ {
+					c.(*mocks.Summarizer).On("GetMsgSummary", mock.Anything, tc.in[i]).
+						Return(fmt.Sprintf("summary%d", i), nil)
+				}
+			},
+			expected: []entity.SummaryMsg{
+				*entity.NewSummaryMsg(
+					entity.NewMsg("0", "i4u", "kek", true),
+					"summary0",
+				),
+				*entity.NewSummaryMsg(
+					entity.NewMsg("1", "i4u", "aboba", true),
+					"summary1",
+				),
+				*entity.NewSummaryMsg(
+					entity.NewMsg("2", "i4u", "lol", true),
+					"summary2",
+				),
+			},
 		},
 	}
 
@@ -85,46 +135,54 @@ func TestSummarizerJob_Run(t *testing.T) {
 			t.Parallel()
 
 			errsCh, in, out := make(chan error), make(chan entity.Message), make(chan entity.SummaryMsg)
-			defer close(errsCh)
 			defer close(in)
-			defer close(out)
-
-			ctx, cancel := context.WithCancel(context.Background())
-			go func() {
-				<-time.After(6 * time.Second)
-				cancel()
-			}()
-
-			var expErr error
-			if len(tc.expectedErrors) > 0 {
-				expErr = tc.expectedErrors[0]
-			}
 
 			client := mocks.NewSummarizer(t)
-			tc.pre(t, client, expErr)
-			go NewSummarizerJob(client, errsCh, in, out).Run(ctx)
+			tc.pre(t, client, tc)
+
+			jobContext, cancelJob := context.WithCancel(context.Background())
+			var jobWg syncs.WaitGroup
+			jobWg.Go(func() {
+				defer close(out)
+				defer close(errsCh)
+
+				NewSummarizerJob(client, errsCh, in, out).Run(jobContext)
+			})
+
+			var inputWg syncs.WaitGroup
+			for _, msg := range tc.in {
+				m := msg
+				inputWg.Go(func() { in <- m })
+			}
+
+			verifyContext, cancelVerify := context.WithCancel(context.Background())
 			go func() {
-				for _, msg := range tc.in {
-					in <- msg
+				for {
+					select {
+					case err, ok := <-errsCh:
+						if !ok {
+							continue
+						}
+
+						if !errors.Is(err, tc.expectedError) {
+							assert.Equal(t, tc.expectedError, err)
+						}
+					case msg, ok := <-out:
+						if !ok {
+							continue
+						}
+
+						assert.Equal(t, tc.expected[parseInt(t, msg.ID())], msg)
+					case <-verifyContext.Done():
+						return
+					}
 				}
 			}()
 
-			var outIndex, errIndex int
-		verifyLoop:
-			for {
-				select {
-				case err := <-errsCh:
-					if !errors.Is(err, tc.expectedErrors[errIndex]) {
-						require.Equal(t, tc.expectedErrors[errIndex], err)
-					}
-					errIndex++
-				case msg := <-out:
-					require.Equal(t, tc.expected[outIndex], msg)
-					outIndex++
-				case <-ctx.Done():
-					break verifyLoop
-				}
-			}
+			inputWg.Wait()
+			cancelJob()
+			jobWg.Wait()
+			cancelVerify()
 
 			client.AssertExpectations(t)
 		})
