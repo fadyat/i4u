@@ -11,6 +11,7 @@ import (
 
 type MessageFetcherJob struct {
 	client api.Mail
+
 	out    []chan<- entity.Message
 	errsCh chan<- error
 }

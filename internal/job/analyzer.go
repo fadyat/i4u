@@ -6,6 +6,7 @@ import (
 	"github.com/fadyat/i4u/api"
 	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
+	"github.com/fadyat/i4u/pkg/syncs"
 	"go.uber.org/zap"
 	"time"
 )
@@ -14,9 +15,8 @@ type MessageAnalyzerJob struct {
 	client       api.Analyzer
 	labelsMapper *config.LabelsMapper
 
-	in  <-chan entity.Message
-	out []chan<- entity.Message
-
+	in     <-chan entity.Message
+	out    []chan<- entity.Message
 	errsCh chan<- error
 }
 
@@ -37,30 +37,34 @@ func NewAnalyzerJob(
 }
 
 func (m *MessageAnalyzerJob) Run(ctx context.Context) {
+	var wg syncs.WaitGroup
+
 	for {
 		select {
 		case msg := <-m.in:
-			go func() {
+			wg.Go(func() {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
 				m.analyze(timeout, msg)
-			}()
+			})
 		case <-ctx.Done():
+			wg.Wait()
 			return
 		}
 	}
 }
 
+// analyze gets the message and sends it to the analyzer API
+// to determine whether the message is an internship request or not.
 func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 	if !config.FeatureFlags.IsAnalyzerJobEnabled {
-		zap.S().Debugf("got message %v, but analyzer job is disabled", msg)
+		zap.S().Debugf("got message %s, but analyzer job is disabled", msg.ID())
 		return
 	}
 
 	// notifying the user that the message is empty, and we can't analyze it
-	// error may happen, when you have dialog with someone, and you reply to
-	// the message.
+	// error may happen, when you have dialog with someone, and you reply to the message.
 	// because, parsing don't work well with that.
 	if msg.Body() == "" {
 		m.errsCh <- fmt.Errorf("got empty body for message: %s", msg.Link())
@@ -73,17 +77,18 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 		return
 	}
 
-	_, ok := msg.(*entity.Msg)
-	if !ok {
+	if _, ok := msg.(*entity.Msg); !ok {
 		m.errsCh <- fmt.Errorf("unknown message type: %T", msg)
 		return
 	}
 
+	// todo: think about the better way to do this
 	msg = msg.(*entity.Msg).Copy().WithIsIntern(isIntern).
 		WithLabel(m.labelsMapper.GetInternLabel(isIntern))
 
-	zap.S().Debugf("analyzed message: %s, isIntern: %v", msg.ID(), isIntern)
 	for _, o := range m.out {
 		go func(o chan<- entity.Message) { o <- msg }(o)
 	}
+
+	zap.S().Debugf("analyzed message: %s, isIntern: %v", msg.ID(), isIntern)
 }
