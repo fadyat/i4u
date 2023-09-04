@@ -90,6 +90,7 @@ to avoid processing it again.
 					}(),
 					tgConfig.ChatID,
 				),
+				gmailConfig.L,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())

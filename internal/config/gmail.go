@@ -23,11 +23,7 @@ type Gmail struct {
 	LabelsLst []string `env:"GMAIL_LABELS" env-default:"i4u,intern:true,intern:false"`
 
 	// L is a labels parsed after setup from yaml config file.
-	L struct {
-		I4U       string `yaml:"i4u"`
-		NotIntern string `yaml:"intern:false"`
-		IsIntern  string `yaml:"intern:true"`
-	} `yaml:"labels"`
+	L *LabelsMapper `yaml:"labels"`
 
 	// MessagesLimit is a batch size for fetching messages from Gmail.
 	MessagesLimit int64 `env:"GMAIL_MESSAGES_LIMIT" env-description:"Batch size for fetching messages" env-default:"2"`

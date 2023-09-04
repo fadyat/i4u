@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"github.com/fadyat/i4u/api"
+	"github.com/fadyat/i4u/internal/config"
 	"github.com/fadyat/i4u/internal/entity"
 	"go.uber.org/zap"
 	"time"
@@ -13,6 +14,8 @@ type producer struct {
 	analyzerClient api.Analyzer
 	summarizer     api.Summarizer
 	sender         api.Sender
+
+	labelsMapper *config.LabelsMapper
 }
 
 func NewProducer(
@@ -20,12 +23,14 @@ func NewProducer(
 	analyzerClient api.Analyzer,
 	summarizer api.Summarizer,
 	sender api.Sender,
+	labelsMapper *config.LabelsMapper,
 ) Producer {
 	return &producer{
 		mailClient:     mailClient,
 		analyzerClient: analyzerClient,
 		summarizer:     summarizer,
 		sender:         sender,
+		labelsMapper:   labelsMapper,
 	}
 }
 
@@ -44,7 +49,11 @@ func (p *producer) Produce(ctx context.Context) <-chan error {
 		p.mailClient, errsCh, labelerChan,
 	)
 	analyzerJob := NewAnalyzerJob(
-		p.analyzerClient, errsCh, analyzerChan, []chan<- entity.Message{summarizerChan, labelerChan},
+		p.analyzerClient,
+		p.labelsMapper,
+		errsCh,
+		analyzerChan,
+		[]chan<- entity.Message{summarizerChan, labelerChan},
 	)
 	summarizerJob := NewSummarizerJob(
 		p.summarizer, errsCh, summarizerChan, senderChan,
