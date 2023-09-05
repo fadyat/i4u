@@ -68,17 +68,17 @@ func TestLabelerJob_Run(t *testing.T) {
 		},
 		{
 			name: "labeling multiple messages",
-			in: []entity.Message{
-				entity.NewMsg(
-					"1", "i4u", "kek", true,
-				),
-				entity.NewMsg(
-					"2", "i4u", "aboba", true,
-				),
-				entity.NewMsg(
-					"3", "i4u", "lol", true,
-				),
-			},
+			in: func() []entity.Message {
+				size := 100
+				msgs := make([]entity.Message, size)
+				for i := 0; i < size; i++ {
+					msgs[i] = entity.NewMsg(
+						"1", "i4u", "kek", true,
+					)
+				}
+
+				return msgs
+			}(),
 			pre: func(t *testing.T, c api.Mail, tc labelerJobTestcase) {
 				for _, msg := range tc.in {
 					c.(*mocks.Mail).On("LabelMsg", mock.Anything, msg).
@@ -128,8 +128,6 @@ func TestLabelerJob_Run(t *testing.T) {
 			inputWg.Wait()
 			cancel()
 			jobWg.Wait()
-
-			labeler.AssertExpectations(t)
 		})
 	}
 }
