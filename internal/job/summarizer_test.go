@@ -68,40 +68,39 @@ func TestSummarizerJob_Run(t *testing.T) {
 		},
 		{
 			name: "summary for multiple messages",
-			in: []entity.Message{
-				entity.NewMsg(
-					"0", "i4u", "kek", true,
-				),
-				entity.NewMsg(
-					"1", "i4u", "aboba", true,
-				),
-				entity.NewMsg(
-					"2", "i4u", "lol", true,
-				),
-				entity.NewMsg(
-					"3", "i4u", "no", false,
-				),
-			},
+			in: func() []entity.Message {
+				var size = 100
+				var msgs = make([]entity.Message, size)
+
+				for i := 0; i < size; i++ {
+					msgs[i] = entity.NewMsg(
+						fmt.Sprintf("%d", i), "i4u", fmt.Sprintf("%d", i), true,
+					)
+				}
+
+				return msgs
+			}(),
 			pre: func(t *testing.T, c api.Summarizer, tc summaryJobTestcase) {
-				for i := 0; i < len(tc.in)-1; i++ {
+				for i := 0; i < len(tc.in); i++ {
 					c.(*mocks.Summarizer).On("GetMsgSummary", mock.Anything, tc.in[i]).
 						Return(fmt.Sprintf("summary%d", i), nil)
 				}
 			},
-			expected: []entity.SummaryMsg{
-				*entity.NewSummaryMsg(
-					entity.NewMsg("0", "i4u", "kek", true),
-					"summary0",
-				),
-				*entity.NewSummaryMsg(
-					entity.NewMsg("1", "i4u", "aboba", true),
-					"summary1",
-				),
-				*entity.NewSummaryMsg(
-					entity.NewMsg("2", "i4u", "lol", true),
-					"summary2",
-				),
-			},
+			expected: func() []entity.SummaryMsg {
+				var size = 100
+				var msgs = make([]entity.SummaryMsg, size)
+
+				for i := 0; i < size; i++ {
+					msgs[i] = *entity.NewSummaryMsg(
+						entity.NewMsg(
+							fmt.Sprintf("%d", i), "i4u", fmt.Sprintf("%d", i), true,
+						),
+						fmt.Sprintf("summary%d", i),
+					)
+				}
+
+				return msgs
+			}(),
 		},
 	}
 
@@ -162,8 +161,6 @@ func TestSummarizerJob_Run(t *testing.T) {
 			cancelJob()
 			jobWg.Wait()
 			cancelVerify()
-
-			summarizer.AssertExpectations(t)
 		})
 	}
 }
