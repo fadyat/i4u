@@ -9,9 +9,9 @@ import (
 	"log"
 )
 
-func analyze(gptConfig *config.GPT) *cobra.Command {
+func devOpenAI(gptConfig *config.GPT) *cobra.Command {
 	return &cobra.Command{
-		Use:   "analyze",
+		Use:   "openai",
 		Short: "Analyze a text",
 		Long: `
 This command will analyze a text and return a summary of it.
