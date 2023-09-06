@@ -59,37 +59,30 @@ func (p *producer) Produce(ctx context.Context) <-chan error {
 	summarizerJob := NewSummarizerJob(p.summarizer, errsCh, summarizerChan, senderChan)
 	senderJob := NewSenderJob(p.sender, errsCh, senderChan)
 
-	var jobsWg syncs.WaitGroup
-	jobs := []struct {
-		Job
-		name    string
-		deferFn func()
-	}{
-		{fetcherJob, "fetcher", func() {}},
-		{labelerJob, "labeler", func() { close(labelerChan) }},
-		{analyzerJob, "analyzer", func() { close(analyzerChan) }},
-		{summarizerJob, "summarizer", func() { close(summarizerChan) }},
-		{senderJob, "sender", func() { close(senderChan) }},
-	}
+	var (
+		jobsWg syncs.WaitGroup
+		jobs   = []Job{
+			fetcherJob, labelerJob, analyzerJob, summarizerJob, senderJob,
+		}
+	)
 
 	for _, j := range jobs {
 		job := j
 
 		jobsWg.Go(func() {
-			defer func() {
-				zap.S().Infof("stopping %s job", job.name)
-				job.deferFn()
-			}()
-
-			zap.S().Infof("starting %s job", job.name)
+			zap.S().Infof("starting %T", job)
 			job.Run(ctx)
 		})
 	}
 
 	go func() {
 		defer func() {
-			zap.S().Info("closing errs channel")
+			zap.S().Info("stopping producer and all channels")
 			close(errsCh)
+			close(labelerChan)
+			close(analyzerChan)
+			close(summarizerChan)
+			close(senderChan)
 		}()
 
 		<-ctx.Done()
