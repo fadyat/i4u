@@ -9,9 +9,11 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/sashabaranov/go-openai v1.15.1
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.8.4
+
+	// using this version because of https://github.com/stretchr/testify/pull/1360
+	github.com/stretchr/testify v1.8.5-0.20230729035215-862e41010c35
 	go.uber.org/zap v1.25.0
-	golang.org/x/oauth2 v0.11.0
+	golang.org/x/oauth2 v0.12.0
 	google.golang.org/api v0.138.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -36,8 +38,8 @@ require (
 	github.com/stretchr/objx v0.5.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/crypto v0.13.0 // indirect
+	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

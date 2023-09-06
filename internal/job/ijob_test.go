@@ -10,7 +10,7 @@ import (
 )
 
 func setup() {
-	lg, _ := zap.NewDevelopment()
+	lg := zap.NewNop()
 	zap.ReplaceGlobals(lg)
 
 	config.FeatureFlags = config.Flags{
@@ -28,6 +28,14 @@ func parseInt(t *testing.T, s string) int {
 	}
 
 	return i
+}
+
+func newLabelsMapper() *config.LabelsMapper {
+	return &config.LabelsMapper{
+		I4U:       "i4u",
+		IsIntern:  "is_intern",
+		NotIntern: "not_intern",
+	}
 }
 
 func TestMain(m *testing.M) {

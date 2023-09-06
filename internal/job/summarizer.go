@@ -43,7 +43,7 @@ func (s *SummarizerJob) Run(ctx context.Context) {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
-				s.summary(timeout, msg)
+				s.summary(timeout, &wg, msg)
 			})
 		case <-ctx.Done():
 			wg.Wait()
@@ -54,7 +54,9 @@ func (s *SummarizerJob) Run(ctx context.Context) {
 
 // summary gets the main information from the message and sends it to the
 // summarizer API. It then sends the summary to the output channel.
-func (s *SummarizerJob) summary(ctx context.Context, msg entity.Message) {
+func (s *SummarizerJob) summary(
+	ctx context.Context, wg *syncs.WaitGroup, msg entity.Message,
+) {
 	if !config.FeatureFlags.IsSummarizerJobEnabled {
 		zap.S().Debugf("got message %s, but summarizer job is disabled", msg.ID())
 		return
@@ -75,5 +77,5 @@ func (s *SummarizerJob) summary(ctx context.Context, msg entity.Message) {
 	}
 
 	zap.S().Debugf("got summary for message %s", msg.ID())
-	s.out <- *entity.NewSummaryMsg(msg, summary)
+	wg.Go(func() { s.out <- *entity.NewSummaryMsg(msg, summary) })
 }

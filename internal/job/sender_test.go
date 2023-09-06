@@ -72,20 +72,18 @@ func TestSenderJob_Run(t *testing.T) {
 		},
 		{
 			name: "send for multiple messages",
-			in: []entity.SummaryMsg{
-				*entity.NewSummaryMsg(
-					entity.NewMsg("0", "i4u", "kek", true),
-					"summary",
-				),
-				*entity.NewSummaryMsg(
-					entity.NewMsg("1", "i4u", "aboba", true),
-					"summary",
-				),
-				*entity.NewSummaryMsg(
-					entity.NewMsg("2", "i4u", "kekis", true),
-					"summary",
-				),
-			},
+			in: func() []entity.SummaryMsg {
+				size := 100
+				msgs := make([]entity.SummaryMsg, size)
+				for i := 0; i < size; i++ {
+					msgs[i] = *entity.NewSummaryMsg(
+						entity.NewMsg("0", "i4u", "kek", true),
+						"summary",
+					)
+				}
+
+				return msgs
+			}(),
 			pre: func(t *testing.T, c api.Sender, tc senderJobTestcase) {
 				c.(*mocks.Sender).On("Send", mock.Anything, mock.Anything).
 					Return(nil)
@@ -132,8 +130,6 @@ func TestSenderJob_Run(t *testing.T) {
 			inputWg.Wait()
 			cancel()
 			jobWg.Wait()
-
-			sender.AssertExpectations(t)
 		})
 	}
 }

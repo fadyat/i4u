@@ -44,9 +44,15 @@ func (m *MessageFetcherJob) Run(ctx context.Context) {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
-				m.fetch(timeout)
+				m.fetch(timeout, &wg)
 			})
 		case <-ctx.Done():
+
+			// stopping the ticker right now to prevent a new
+			// stage of fetching messages from the mail provider.
+			// deferring with stopping the ticker won't
+			// break the logic, because the next stops aren't panicking.
+			ticker.Stop()
 			wg.Wait()
 			return
 		}
@@ -55,25 +61,20 @@ func (m *MessageFetcherJob) Run(ctx context.Context) {
 
 // fetch getting unread messages from mail provider and push them to the next stage
 // with parsing to the internal message format.
-func (m *MessageFetcherJob) fetch(ctx context.Context) {
+func (m *MessageFetcherJob) fetch(ctx context.Context, wg *syncs.WaitGroup) {
 	for wrap := range m.client.GetUnreadMsgs(ctx) {
 		if wrap.Err != nil {
 			m.errsCh <- fmt.Errorf("failed to fetch message: %w", wrap.Err)
 			continue
 		}
 
-		m.pushSingle(wrap.Msg)
+		for _, o := range m.out {
+			out := o
+			wg.Go(func() { out <- wrap.Msg })
+		}
+
+		zap.S().Debugf("message %s pushed to the next stage", wrap.Msg.ID())
 	}
 
 	zap.S().Debug("message fetcher job finished")
-}
-
-// pushSingle pushes the message to all channels in separate goroutines,
-// to avoid blocking the main thread.
-func (m *MessageFetcherJob) pushSingle(msg entity.Message) {
-	for _, o := range m.out {
-		go func(o chan<- entity.Message) { o <- msg }(o)
-	}
-
-	zap.S().Debugf("message %s was pushed to the next stage", msg.ID())
 }

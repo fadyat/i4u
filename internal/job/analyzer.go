@@ -46,7 +46,7 @@ func (m *MessageAnalyzerJob) Run(ctx context.Context) {
 				timeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
-				m.analyze(timeout, msg)
+				m.analyze(timeout, &wg, msg)
 			})
 		case <-ctx.Done():
 			wg.Wait()
@@ -57,7 +57,9 @@ func (m *MessageAnalyzerJob) Run(ctx context.Context) {
 
 // analyze gets the message and sends it to the analyzer API
 // to determine whether the message is an internship request or not.
-func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
+func (m *MessageAnalyzerJob) analyze(
+	ctx context.Context, wg *syncs.WaitGroup, msg entity.Message,
+) {
 	if !config.FeatureFlags.IsAnalyzerJobEnabled {
 		zap.S().Debugf("got message %s, but analyzer job is disabled", msg.ID())
 		return
@@ -67,7 +69,7 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 	// error may happen, when you have dialog with someone, and you reply to the message.
 	// because, parsing don't work well with that.
 	if msg.Body() == "" {
-		m.errsCh <- fmt.Errorf("got empty body for message: %s", msg.Link())
+		m.errsCh <- fmt.Errorf("got empty body for message: %s", msg.ID())
 		return
 	}
 
@@ -87,7 +89,8 @@ func (m *MessageAnalyzerJob) analyze(ctx context.Context, msg entity.Message) {
 		WithLabel(m.labelsMapper.GetInternLabel(isIntern))
 
 	for _, o := range m.out {
-		go func(o chan<- entity.Message) { o <- msg }(o)
+		out := o
+		wg.Go(func() { out <- msg })
 	}
 
 	zap.S().Debugf("analyzed message: %s, isIntern: %v", msg.ID(), isIntern)
