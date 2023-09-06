@@ -1,4 +1,5 @@
-### i4u
+## i4u [![Go Report Card](https://goreportcard.com/badge/github.com/fadyat/i4u)](https://goreportcard.com/report/github.com/fadyat/i4u) [![Coverage Status](https://coveralls.io/repos/github/fadyat/i4u/badge.svg?branch=master)](https://coveralls.io/github/fadyat/i4u?branch=master) [![codecov](https://codecov.io/gh/fadyat/i4u/branch/master/graph/badge.svg)](https://app.codecov.io/gh/fadyat/i4u)
+
 
 **Internship for you** is a lightweight and efficient solution designed to streamline the management of internship
 requests.
