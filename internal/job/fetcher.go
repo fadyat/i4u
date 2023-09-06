@@ -47,6 +47,12 @@ func (m *MessageFetcherJob) Run(ctx context.Context) {
 				m.fetch(timeout, &wg)
 			})
 		case <-ctx.Done():
+
+			// stopping the ticker right now to prevent a new
+			// stage of fetching messages from the mail provider.
+			// deferring with stopping the ticker won't
+			// break the logic, because the next stops aren't panicking.
+			ticker.Stop()
 			wg.Wait()
 			return
 		}
