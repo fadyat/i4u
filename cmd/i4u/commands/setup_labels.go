@@ -13,7 +13,7 @@ import (
 	"sync"
 )
 
-func setupLabels(gmailConfig *config.Gmail) *cobra.Command {
+func setup(gmailConfig *config.Gmail) *cobra.Command {
 	var oauth2Config = token.GetOAuthConfig(gmailConfig)
 
 	return &cobra.Command{

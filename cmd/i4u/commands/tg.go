@@ -8,13 +8,15 @@ import (
 	"log"
 )
 
-func tgChannelDescription(tgConfig *config.Telegram) *cobra.Command {
+func devTg(tgConfig *config.Telegram) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tg",
 		Short: "Telegram description for i4u",
 		Long: `
 This command will print the message to the telegram chat,
 that tells the user what this bot is about.
+Used for testing purposes, this command will be in the some
+of the job's, that run after receiving an message summary, logic.
 `,
 		Args: cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, _ []string) {

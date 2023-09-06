@@ -33,18 +33,12 @@ func run(
 	return &cobra.Command{
 		Use:   "run",
 		Args:  cobra.NoArgs,
-		Short: "Starting web server to read your Gmail inbox",
+		Short: "Entrypoint for the application",
 		Long: `
-Start point of the application. It will start a web server
-on port 8080 by default. It will read your Gmail inbox and
-trying to understand is this message is an internship request
-or not.
+Starting all jobs of application. Each job launches in a separate goroutine.
+Context is used to stop all jobs when signal is received.
 
-If current unread message is an internship request, it will
-be added to the tracker queue for further processing.
-
-When message is processed, it will get an label "i4u"
-to avoid processing it again.
+All messages started for processing will go through all stages of the pipeline.
 `,
 		Run: func(cmd *cobra.Command, _ []string) {
 			var staticToken, err = token.ReadTokenFromFile(gmailConfig.TokenFile)
